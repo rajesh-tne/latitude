@@ -1,0 +1,56 @@
+import pyspark
+from faker import Factory
+from collections import defaultdict
+from pyspark.sql.types import *
+file_location = "/FileStore/tables/persons.csv"
+file_type = "csv"
+
+schema = StructType([
+    StructField("first_name", StringType()),
+    StructField("last_name", StringType()),
+    StructField("address", StringType()),
+    StructField("dob", StringType()),
+])
+
+# CSV options
+infer_schema = "true"
+first_row_is_header = "true"
+delimiter = ","
+
+# The applied options are for CSV files. For other file types, these will be ignored.
+df = spark.read.format(file_type) \
+  .option("inferSchema", infer_schema) \
+  .option("header", first_row_is_header) \
+  .option("sep", delimiter) \
+  .option("schema", schema) \
+  .load(file_location)
+
+#df.show()
+dataCollect = df.collect()
+
+def anonymize_rows(rows):
+    """
+    Rows is an iterable of dictionaries that contain name and
+    address fields that need to be anonymized.
+    """
+    # Load the faker and its providers
+    faker  = Factory.create()
+
+    # Create mappings of names & address to faked names & address.
+    names  = defaultdict(faker.name)
+    addresses = defaultdict(faker.address)
+
+
+    # Iterate over the rows and yield anonymized rows.
+    for row in rows:
+        a_row = {'first_name': names[row['first_name']], 'last_name': names[row['last_name']], 'address':addresses[row['address']], 'dob':row['dob']}
+        # Yield the row back to the caller
+        yield a_row
+        
+a_data=[]        
+for row in anonymize_rows(dataCollect):
+    a_data.append(row)
+#New DF with  anonymize data   
+a_df = spark.createDataFrame(a_data,schema)
+a_df.schema
+a_df.show()
